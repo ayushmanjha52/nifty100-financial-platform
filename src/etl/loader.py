@@ -6,7 +6,7 @@ Complete data loading module for Nifty 100 Financial Intelligence Platform.
 import pandas as pd
 import os
 from dotenv import load_dotenv
-from normaliser import normalize_ticker, normalize_year
+from etl.normaliser import normalize_ticker, normalize_year
 from db_utils import create_tables, insert_dataframe
 
 load_dotenv()

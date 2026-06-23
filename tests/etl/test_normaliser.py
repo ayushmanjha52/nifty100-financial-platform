@@ -115,6 +115,32 @@ def test_normalize_ticker_and_year_combined():
     assert ticker == "RELIANCE"
     assert year == "2023-03"
 
+# ============================================================
+# Additional Normaliser Tests (to reach 35+)
+# ============================================================
+
+def test_normalize_ticker_leading_trailing_spaces():
+    assert normalize_ticker("   RELIANCE   ") == "RELIANCE"
+
+
+def test_normalize_year_with_extra_text():
+    assert normalize_year("Financial Year 2023") == "2023-03"
+    assert normalize_year("Year Ending Mar-22") == "2022-03"
+
+
+def test_normalize_year_boundary_values():
+    assert normalize_year("FY1950") == "1950-03"
+    assert normalize_year("FY2050") == "2050-03"
+
+
+def test_normalize_ticker_unicode_characters():
+    assert normalize_ticker("RELIANCE™") == "RELIANCE™"
+
+
+def test_normalize_year_only_numbers():
+    assert normalize_year("2023") == "2023-03"
+    assert normalize_year("22") == "2022-03"
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

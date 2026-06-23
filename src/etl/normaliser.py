@@ -10,16 +10,39 @@ from typing import Optional
 def normalize_ticker(ticker: str) -> str:
     """
     Clean and standardise company ticker (NSE symbol).
+    
+    Args:
+        ticker: Raw ticker string from dataset
+        
+    Returns:
+        Cleaned uppercase ticker without leading/trailing whitespace
     """
     if not isinstance(ticker, str):
         return ""
     
-    return ticker.strip().upper()
+    cleaned = ticker.strip().upper()
+    return cleaned
+
 
 def normalize_year(year_label: str) -> Optional[str]:
     """
     Convert various year formats to standard 'YYYY-MM' format.
-    Only accepts reasonable years (1950-2050).
+    Supports months like Mar, Dec, FY, etc.
+    
+    Only accepts years between 1950 and 2050.
+    
+    Examples:
+        "Mar-23"   -> "2023-03"
+        "Dec-22"   -> "2022-12"
+        "FY23"     -> "2023-03"
+        "2022-03"  -> "2022-03"
+        "FY2023"   -> "2023-03"
+    
+    Args:
+        year_label: Raw year string from dataset
+        
+    Returns:
+        Standardised year in 'YYYY-MM' format or None if invalid
     """
     if not isinstance(year_label, str):
         return None
@@ -40,7 +63,7 @@ def normalize_year(year_label: str) -> Optional[str]:
     # Find month (optional)
     month_match = re.search(r'(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC|FY)', text)
     
-    # Find 2 or 4 digit year
+    # Find year (2 or 4 digits)
     year_match = re.search(r'(\d{2,4})', text)
     
     if not year_match:
@@ -67,6 +90,6 @@ def normalize_year(year_label: str) -> Optional[str]:
         month_key = month_match.group(1)
         month = month_map.get(month_key, '03')
     else:
-        month = '03'
+        month = '03'  # Default to March
     
     return f"{year}-{month}"

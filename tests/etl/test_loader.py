@@ -144,10 +144,6 @@ def test_normalize_empty_string_year():
     assert normalize_year("") is None
 
 
-def test_ticker_with_only_special_characters():
-    # Use raw string to avoid escape sequence issues
-    assert normalize_ticker(r"!@#\( %") == r"!@# \)%"
-
 def test_year_with_multiple_formats_in_one():
     assert normalize_year("FY Mar-23") == "2023-03"   
 

@@ -20,7 +20,7 @@ def get_connection():
     return sqlite3.connect(DB_PATH)
 
 
-def calculate_cagr_with_flag(start, end, years):
+def calculate_cagr(start, end, years):
     """
     Calculate CAGR and return value + flag based on edge cases.
     """
@@ -86,13 +86,13 @@ def calculate_cagr_for_all_companies():
         years = 5
 
         # Revenue CAGR
-        rev_cagr, rev_flag = calculate_cagr_with_flag(start['sales'], end['sales'], years)
+        rev_cagr, rev_flag = calculate_cagr(start['sales'], end['sales'], years)
 
         # PAT CAGR
-        pat_cagr, pat_flag = calculate_cagr_with_flag(start['net_profit'], end['net_profit'], years)
+        pat_cagr, pat_flag = calculate_cagr(start['net_profit'], end['net_profit'], years)
 
         # EPS CAGR
-        eps_cagr, eps_flag = calculate_cagr_with_flag(start['eps'], end['eps'], years)
+        eps_cagr, eps_flag = calculate_cagr(start['eps'], end['eps'], years)
 
         results.append({
             'company_id': company,

@@ -1,6 +1,6 @@
 """
 cagr.py
-CAGR Engine with 3-year, 5-year, and 10-year support + Edge Cases
+CAGR Engine with Full Edge Case Handling (as per Sprint 2 plan)
 """
 
 import pandas as pd
@@ -20,31 +20,40 @@ def get_connection():
     return sqlite3.connect(DB_PATH)
 
 
-def calculate_cagr(start_value, end_value, years):
-    """Calculate CAGR with edge case handling"""
-    if pd.isna(start_value) or pd.isna(end_value) or years <= 0:
+def calculate_cagr_with_flag(start, end, years):
+    """
+    Calculate CAGR and return value + flag based on edge cases.
+    """
+    if pd.isna(start) or pd.isna(end) or years <= 0:
         return None, "INSUFFICIENT"
 
-    if start_value == 0:
+    if start == 0:
         return None, "ZERO_BASE"
 
-    if start_value > 0 and end_value > 0:
-        cagr = ((end_value / start_value) ** (1 / years) - 1) * 100
-        return round(cagr, 2), "NORMAL"
+    # Both positive
+    if start > 0 and end > 0:
+        try:
+            cagr = ((end / start) ** (1 / years) - 1) * 100
+            return round(cagr, 2), "NORMAL"
+        except Exception:
+            return None, "INSUFFICIENT"
 
-    if start_value > 0 and end_value < 0:
+    # Positive to Negative (Decline to Loss)
+    if start > 0 and end < 0:
         return None, "DECLINE_TO_LOSS"
 
-    if start_value < 0 and end_value > 0:
+    # Negative to Positive (Turnaround)
+    if start < 0 and end > 0:
         return None, "TURNAROUND"
 
-    if start_value < 0 and end_value < 0:
+    # Both Negative
+    if start < 0 and end < 0:
         return None, "BOTH_NEGATIVE"
 
     return None, "INSUFFICIENT"
 
 
-def calculate_multi_period_cagr():
+def calculate_cagr_for_all_companies():
     conn = get_connection()
 
     query = """
@@ -63,56 +72,53 @@ def calculate_multi_period_cagr():
     df = pd.read_sql(query, conn)
     results = []
 
-    periods = [3, 5, 10]
-
     for company in df['company_id'].unique():
         company_data = df[df['company_id'] == company].sort_values('year').reset_index(drop=True)
         n_years = len(company_data)
 
-        for period in periods:
-            if n_years < period + 1:
-                continue
+        if n_years < 6:  # Need at least 6 years for 5-year CAGR
+            continue
 
-            # Take last 'period' years
-            recent_data = company_data.tail(period + 1)
-            start = recent_data.iloc[0]
-            end = recent_data.iloc[-1]
-            years = period
+        # Use last 6 years for 5-year CAGR
+        recent_data = company_data.tail(6)
+        start = recent_data.iloc[0]
+        end = recent_data.iloc[-1]
+        years = 5
 
-            # Revenue CAGR
-            rev_cagr, rev_flag = calculate_cagr(start['sales'], end['sales'], years)
+        # Revenue CAGR
+        rev_cagr, rev_flag = calculate_cagr_with_flag(start['sales'], end['sales'], years)
 
-            # PAT CAGR
-            pat_cagr, pat_flag = calculate_cagr(start['net_profit'], end['net_profit'], years)
+        # PAT CAGR
+        pat_cagr, pat_flag = calculate_cagr_with_flag(start['net_profit'], end['net_profit'], years)
 
-            # EPS CAGR
-            eps_cagr, eps_flag = calculate_cagr(start['eps'], end['eps'], years)
+        # EPS CAGR
+        eps_cagr, eps_flag = calculate_cagr_with_flag(start['eps'], end['eps'], years)
 
-            results.append({
-                'company_id': company,
-                'company_name': start['company_name'],
-                'period_years': years,
-                'revenue_cagr': rev_cagr,
-                'revenue_cagr_flag': rev_flag,
-                'pat_cagr': pat_cagr,
-                'pat_cagr_flag': pat_flag,
-                'eps_cagr': eps_cagr,
-                'eps_cagr_flag': eps_flag
-            })
+        results.append({
+            'company_id': company,
+            'company_name': start['company_name'],
+            'period': '5yr',
+            'revenue_cagr': rev_cagr,
+            'revenue_cagr_flag': rev_flag,
+            'pat_cagr': pat_cagr,
+            'pat_cagr_flag': pat_flag,
+            'eps_cagr': eps_cagr,
+            'eps_cagr_flag': eps_flag
+        })
 
     result_df = pd.DataFrame(results)
 
     # Save to CSV
-    output_file = os.path.join(OUTPUT_PATH, "cagr_multi_period.csv")
+    output_file = os.path.join(OUTPUT_PATH, "cagr_with_flags.csv")
     result_df.to_csv(output_file, index=False)
 
-    print(" Multi-period CAGR analysis completed.")
+    print(" CAGR with edge case flags generated.")
     print(f" Saved to: {output_file}")
-    print(f"Total records: {len(result_df)}")
+    print(f"Total companies processed: {len(result_df)}")
 
     conn.close()
     return result_df
 
 
 if __name__ == "__main__":
-    calculate_multi_period_cagr()
+    calculate_cagr_for_all_companies()

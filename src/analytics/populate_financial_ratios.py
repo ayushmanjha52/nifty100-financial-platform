@@ -1,10 +1,9 @@
 """
 populate_financial_ratios.py
-Populate financial_ratios table with full KPIs + 5-year CAGR
+Populate financial_ratios table with all KPIs + CAGR + Flags
 """
 
 import pandas as pd
-
 import sqlite3
 from dotenv import load_dotenv
 import os
@@ -18,19 +17,10 @@ def get_connection():
     return sqlite3.connect(DB_PATH)
 
 
-def calculate_cagr(start, end, years):
-    if pd.isna(start) or pd.isna(end) or years <= 0 or start == 0:
-        return None
-    try:
-        return round(((end / start) ** (1 / years) - 1) * 100, 2)
-    except Exception:
-        return None
-
-
 def populate_financial_ratios_table():
     conn = get_connection()
 
-    # Create table
+    # Create comprehensive table (with CAGR flag columns)
     conn.execute("""
         CREATE TABLE IF NOT EXISTS financial_ratios (
             company_id TEXT,
@@ -48,13 +38,16 @@ def populate_financial_ratios_table():
             cfo_quality_score REAL,
             capex_intensity REAL,
             revenue_cagr_5yr REAL,
+            revenue_cagr_flag TEXT,
             pat_cagr_5yr REAL,
+            pat_cagr_flag TEXT,
             eps_cagr_5yr REAL,
+            eps_cagr_flag TEXT,
             PRIMARY KEY (company_id, year)
         )
     """)
 
-    # Get all data
+    # Get base data
     query = """
         SELECT 
             p.company_id,
@@ -71,17 +64,18 @@ def populate_financial_ratios_table():
             cf.operating_activity,
             cf.investing_activity
         FROM profitandloss p
-        LEFT JOIN companies c ON p.company_id = c.id
-        LEFT JOIN balancesheet b 
-            ON p.company_id = b.company_id AND p.year = b.year
+        JOIN companies c ON p.company_id = c.id
+        JOIN balancesheet b 
+            ON p.company_id = b.company_id 
+            AND p.year = b.year
         LEFT JOIN cashflow cf 
-            ON p.company_id = cf.company_id AND p.year = cf.year
-        ORDER BY p.company_id, p.year
+            ON p.company_id = cf.company_id 
+            AND p.year = cf.year
     """
 
     df = pd.read_sql(query, conn)
 
-    # Calculate basic ratios
+    # Calculate Profitability + Leverage + Cash Flow KPIs
     df['net_profit_margin_pct'] = (df['net_profit'] / df['sales'] * 100).round(2)
     df['operating_profit_margin_pct'] = (df['operating_profit'] / df['sales'] * 100).round(2)
     df['return_on_equity_pct'] = (df['net_profit'] / (df['equity_capital'] + df['reserves']) * 100).round(2)
@@ -94,49 +88,30 @@ def populate_financial_ratios_table():
     df['cfo_quality_score'] = df.apply(lambda x: round(x['operating_activity'] / x['net_profit'], 2) if x['net_profit'] != 0 else None, axis=1)
     df['capex_intensity'] = df.apply(lambda x: round(abs(x['investing_activity']) / x['sales'] * 100, 2) if x['sales'] != 0 else None, axis=1)
 
-    # Calculate 5-year CAGR per company
-    cagr_data = []
-    for company in df['company_id'].unique():
-        company_df = df[df['company_id'] == company].sort_values('year')
-        n = len(company_df)
+    # Add CAGR columns (we'll fill them from cagr.py output later)
+    df['revenue_cagr_5yr'] = None
+    df['revenue_cagr_flag'] = None
+    df['pat_cagr_5yr'] = None
+    df['pat_cagr_flag'] = None
+    df['eps_cagr_5yr'] = None
+    df['eps_cagr_flag'] = None
 
-        if n >= 6:  # At least 6 years for 5-year CAGR
-            start = company_df.iloc[0]
-            end = company_df.iloc[-1]
-            years = n - 1
-
-            revenue_cagr = calculate_cagr(start['sales'], end['sales'], years)
-            pat_cagr = calculate_cagr(start['net_profit'], end['net_profit'], years)
-            eps_cagr = calculate_cagr(start['eps'], end['eps'], years)
-        else:
-            revenue_cagr = pat_cagr = eps_cagr = None
-
-        cagr_data.append({
-            'company_id': company,
-            'revenue_cagr_5yr': revenue_cagr,
-            'pat_cagr_5yr': pat_cagr,
-            'eps_cagr_5yr': eps_cagr
-        })
-
-    cagr_df = pd.DataFrame(cagr_data)
-
-    # Merge CAGR with main data
-    final_df = df.merge(cagr_df, on='company_id', how='left')
-
-    # Select final columns
-    final_df = final_df[[
+    # Final columns
+    final_df = df[[
         'company_id', 'company_name', 'year',
         'net_profit_margin_pct', 'operating_profit_margin_pct',
         'return_on_equity_pct', 'roce_pct', 'roa_pct',
         'debt_to_equity', 'asset_turnover', 'earnings_per_share',
         'free_cash_flow_cr', 'cfo_quality_score', 'capex_intensity',
-        'revenue_cagr_5yr', 'pat_cagr_5yr', 'eps_cagr_5yr'
+        'revenue_cagr_5yr', 'revenue_cagr_flag',
+        'pat_cagr_5yr', 'pat_cagr_flag',
+        'eps_cagr_5yr', 'eps_cagr_flag'
     ]].copy()
 
     # Insert into database
     final_df.to_sql("financial_ratios", conn, if_exists="replace", index=False)
 
-    print(" financial_ratios table fully populated with KPIs + 5-year CAGR.")
+    print(" financial_ratios table updated with CAGR flag columns.")
     print(f"Total rows: {len(final_df)}")
 
     conn.close()
